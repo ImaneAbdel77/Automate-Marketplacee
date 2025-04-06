@@ -1,0 +1,107 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'jdk17'
+        maven 'maven3'
+    }
+
+    environment {
+        DOCKER_IMAGE = "marketplace/config:${env.BUILD_NUMBER}"
+        SONARQUBE_URL = 'http://sonarqube:9000'
+        DOCKER_HUB_REPO = "imane7/marketplace-config"
+
+    }
+
+
+    stages {
+        // Étape de checkout
+        stage('Checkout Code') {
+            steps {
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [],
+                    submoduleCfg: [],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/ImaneAbdel77/Automate-MarketPlace.git',
+                        credentialsId: 'PAT_Jenkins'
+                    ]]
+                ])
+            }
+        }
+
+       stage('Build') {
+            steps {
+                dir('Back_end/Config-Service') {
+                    sh 'chmod +x mvnw'  // Ajoute cette ligne pour donner la permission d'exécution
+            sh './mvnw clean package -DskipTests'
+        }
+    }
+}
+
+        // Étape d'exécution des tests unitaires et d'intégration
+        stage('Tests') {
+            steps {
+                dir('Back_end/Config-Service') {
+                    // Exécution des tests unitaires
+                    sh './mvnw clean test'  // Cette ligne exécute les tests unitaires
+
+                    // Exécution des tests d'intégration (si tu as un profil Maven pour l'intégration)
+                    sh './mvnw verify'  // Ou une commande spécifique pour les tests d'intégration
+                }
+            }
+        }
+
+
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    echo "Démarrage de l'analyse SonarQube"
+                    dir('Back_end/Config-Service') {
+                        withSonarQubeEnv('sonar-server') {
+                            echo "Lancement de l'analyse SonarQube..."
+                            sh """
+                                mvn clean validate sonar:sonar \
+                                    -Dsonar.projectKey=Users-Servic \
+                                    -Dsonar.host.url=${SONARQUBE_URL}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+        // Build, Tag et Push Docker Image
+        stage('Build,Tag and Push Docker Image') {
+            steps {
+                // Exécution des tests Selenium
+                script {
+                    dir('Back_end/Config-Service') {  // Assurez-vous que vous êtes dans le bon répertoire
+                sh 'mvn test -Dtest=TestSuite -Dsurefire.failIfNoSpecifiedTests=false'
+            }
+                }
+            }
+        }
+
+}
+
+
+
+
+post {
+    success {
+        script {
+            echo 'Config Service pipeline succeeded!'
+        }
+    }
+    failure {
+        script {
+            echo 'Config Service pipeline failed!'
+        }
+    }
+}
+ }

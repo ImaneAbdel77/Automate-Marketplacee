@@ -1,0 +1,113 @@
+pipeline {
+	agent any
+
+    environment {
+		DOCKER_IMAGE = "universal_marketplace-main3-marketplace-front:${env.BUILD_NUMBER}"
+        SONARQUBE_URL = 'http://sonarqube:9000'
+              DOCKER_HUB_REPO = "imane7/marketplace-front"
+
+    }
+
+    stages {
+		// Étape de checkout
+        stage('Checkout Code') {
+			steps {
+				checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [],
+                    submoduleCfg: [],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/ImaneAbdel77/Automate-MarketPlace.git',
+                        credentialsId: 'PAT_Jenkins'
+                    ]]
+                ])
+            }
+        }
+
+       stage('Build') {
+			steps {
+				dir('Front_end') {
+					sh 'chmod +x mvnw'  // Ajoute cette ligne pour donner la permission d'exécution
+            sh './mvnw clean package -DskipTests'
+        }
+    }
+}
+
+        // Étape d'exécution des tests unitaires et d'intégration
+        stage('Run Tests') {
+			steps {
+				dir('Front_end') {
+					// Exécution des tests unitaires
+                    sh './mvnw clean test'  // Cette ligne exécute les tests unitaires
+
+                    // Exécution des tests d'intégration (si tu as un profil Maven pour l'intégration)
+                    sh './mvnw verify'  // Ou une commande spécifique pour les tests d'intégration
+                }
+            }
+        }
+
+
+       stage('SonarQube Analysis') {
+			steps {
+				script {
+					echo "Démarrage de l'analyse SonarQube"
+            dir('Front_end') {  // Assure-toi que tu es dans le bon répertoire
+                withSonarQubeEnv('sonar-server') {
+						echo "Lancement de l'analyse SonarQube..."
+                    sh """
+                       mvn -X clean validate sonar:sonar \
+                            -Dsonar.projectKey=front \
+                            -Dsonar.host.url=${SONARQUBE_URL} \
+                            -Dsonar.login=${SONARQUBE_TOKEN}
+                    """
+                }
+            }
+        }
+    }
+}
+
+      stage('Build Docker Image') {
+			steps {
+				dir('Front_end') {
+					sh "docker build -t ${DOCKER_IMAGE} ."
+        }
+    }
+}
+
+        // Étape de scan avec Trivy
+        stage('Scan with Trivy') {
+			steps {
+				sh "trivy image --severity HIGH,CRITICAL ${DOCKER_IMAGE}"
+            }
+        }
+
+        // Build, Tag et Push Docker Image
+        stage('Build, Tag, and Push Docker Image') {
+			steps {
+				script {
+					dir('Front_end') {
+						// Connexion à Docker Hub (assurez-vous que Jenkins a accès)
+                        withCredentials([string(credentialsId: 'DOCKER_HUB_CREDENTIALS', variable: 'Mimo@77')]) {
+							sh "echo "mdp" | docker login -u imane7 --password-stdin"
+                        }
+
+                        sh "docker build -t ${DOCKER_IMAGE} ."
+                        sh "docker tag ${DOCKER_IMAGE} ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
+                        sh "docker push ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
+                    }
+                }
+            }
+        }
+    }
+
+    // Post-actions
+    post {
+		success {
+			echo 'Config Service pipeline succeeded!'
+        }
+        failure {
+			echo 'Config Service pipeline failed!'
+        }
+    }
+}

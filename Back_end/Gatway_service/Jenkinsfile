@@ -1,0 +1,108 @@
+pipeline {
+	agent any
+
+    environment {
+		DOCKER_IMAGE = "universal_marketplace-main3-marketplace-gateway:${env.BUILD_NUMBER}"
+        SONARQUBE_URL = 'http://sonarqube:9000'
+             DOCKER_HUB_REPO = "imane7/marketplace-gat"
+
+    }
+
+
+    stages {
+		// Étape de checkout
+        stage('Checkout Code') {
+			steps {
+				checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    doGenerateSubmoduleConfigurations: false,
+                    extensions: [],
+                    submoduleCfg: [],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/ImaneAbdel77/Automate-MarketPlace.git',
+                        credentialsId: 'PAT_Jenkins'
+                    ]]
+                ])
+            }
+        }
+
+       stage('Build') {
+			steps {
+				dir('Back_end/Gatway_service') {
+					sh 'chmod +x mvnw'  // Ajoute cette ligne pour donner la permission d'exécution
+            sh './mvnw clean package -DskipTests'
+        }
+    }
+}
+
+        // Étape d'exécution des tests unitaires et d'intégration
+        stage('Tests') {
+			steps {
+				dir('Back_end/Gatway_service') {
+					// Exécution des tests unitaires
+                    sh './mvnw clean test'  // Cette ligne exécute les tests unitaires
+
+                    // Exécution des tests d'intégration (si tu as un profil Maven pour l'intégration)
+                    sh './mvnw verify'  // Ou une commande spécifique pour les tests d'intégration
+                }
+            }
+        }
+
+
+
+  stage('SonarQube Analysis') {
+			steps {
+				script {
+					echo "Démarrage de l'analyse SonarQube"
+                    dir('Back_end/Gatway_service') {
+						withSonarQubeEnv('sonar-server') {
+							echo "Lancement de l'analyse SonarQube..."
+                            sh """
+                                mvn clean validate sonar:sonar \
+                                    -Dsonar.projectKey=Gateway-Service \
+                                    -Dsonar.host.url=${SONARQUBE_URL}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+
+
+        // Build, Tag et Push Docker Image
+        stage('Build, Tag, and Push Docker Image') {
+			steps {
+				script {
+					dir('Back_end/Gatway-Service') {
+						// Connexion à Docker Hub (assurez-vous que Jenkins a accès)
+                        withCredentials([string(credentialsId: 'DOCKER_HUB_CREDENTIALS', variable: 'Mimo@77')]) {
+							sh "echo ${DOCKER_PASSWORD} | docker login -u imane7 --password-stdin"
+                        }
+
+                        sh "docker build -t ${DOCKER_IMAGE} ."
+                        sh "docker tag ${DOCKER_IMAGE} ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
+                        sh "docker push ${DOCKER_HUB_REPO}:${env.BUILD_NUMBER}"
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
+
+post {
+		success {
+			script {
+				echo 'Config Service pipeline succeeded!'
+        }
+    }
+    failure {
+			script {
+				echo 'Config Service pipeline failed!'
+        }
+    }
+}
+ }

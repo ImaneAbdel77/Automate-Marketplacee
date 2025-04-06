@@ -1,0 +1,114 @@
+services:
+  marketplace-discovery:
+    build: ./Back_end/Discovery_Service
+    container_name: Market-Discovery
+    ports:
+      - '8080:8080'
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 10s
+      retries: 4
+  marketplace-config:
+    build: ./Back_end/Config-Service
+    container_name: Market-Config
+    ports:
+      - '9999:9999'
+    environment:
+      - DISCOVERY_SERVICE_URL:http://localhost:8761/eureka
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9999/actuator/health" ]
+      interval: 10s
+      retries: 4
+    depends_on:
+      marketplace-discovery:
+        condition: service_healthy
+  marketplace-users:
+    build: ./Back_end/users
+    container_name: Market-users
+    ports:
+      - '8090:8090'
+    environment:
+      - DISCOVERY_SERVICE_URL:http://localhost:8761/eureka
+      - CONFIG_SERVICE_URL:http://localhost:9999
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8090/actuator/health" ]
+      interval: 10s
+      retries: 4
+    depends_on:
+      marketplace-config:
+        condition: service_healthy
+  marketplace-products:
+    build: ./Back_end/Product-management
+    container_name: Market-Products
+    ports:
+      - '8085:8085'
+    environment:
+      - DISCOVERY_SERVICE_URL:http://localhost:8761/eureka
+      - CONFIG_SERVICE_URL:http://localhost:9999
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8085/actuator/health" ]
+      interval: 10s
+      retries: 4
+    depends_on:
+      marketplace-users:
+        condition: service_healthy
+  marketplace-ordre:
+    build: ./Back_end/Ordre-Service
+    container_name: Market-Ordre
+    ports:
+      - '8079:8079'
+    environment:
+      - DISCOVERY_SERVICE_URL:http://localhost:8761/eureka
+      - CONFIG_SERVICE_URL:http://localhost:9999
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8079/actuator/health" ]
+      interval: 10s
+      retries: 4
+    depends_on:
+      marketplace-products:
+        condition: service_healthy
+  marketplace-vente:
+    build: ./Back_end/Vente
+    container_name: Market-Vente
+    ports:
+      - '8082:8082'
+    environment:
+      - DISCOVERY_SERVICE_URL:http://localhost:8761/eureka
+      - CONFIG_SERVICE_URL:http://localhost:9999
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8082/actuator/health" ]
+      interval: 10s
+      retries: 4
+    depends_on:
+      marketplace-ordre:
+        condition: service_healthy
+  marketplace-webpay:
+    build: ./Back_end/WebPay
+    container_name: Market-webpay
+    ports:
+      - '8081:8081'
+    environment:
+      - DISCOVERY_SERVICE_URL:http://localhost:8761/eureka
+      - CONFIG_SERVICE_URL:http://localhost:9999
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+      interval: 10s
+      retries: 4
+    depends_on:
+      marketplace-vente:
+        condition: service_healthy
+  marketplace-gateway:
+    build: ./Back_end/Gatway_service
+    container_name: Market-Gateway
+    ports:
+      - '8888:8888'
+    environment:
+      - DISCOVERY_SERVICE_URL:http://localhost:8761/eureka
+      - CONFIG_SERVICE_URL:http://localhost:9999
+    depends_on:
+      marketplace-webpay:
+        condition: service_healthy
+
+
+
+
